@@ -114,4 +114,104 @@ public class Job {
     protected void onUpdate() {
         updatedAt = Instant.now();
     }
+
+    // Claim a job for a specific worker
+    public void claim(String workerId) {
+
+        if (workerId == null || workerId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Worker ID cannot be empty"
+            );
+        }
+
+        if (status != JobStatus.QUEUED &&
+                status != JobStatus.RETRY_WAIT) {
+
+            throw new IllegalStateException(
+                    "Job cannot be claimed from status: " + status
+            );
+        }
+
+        this.status = JobStatus.PROCESSING;
+        this.lockedAt = Instant.now();
+        this.lockedBy = workerId;
+        this.attemptCount++;
+    }
+
+    // Mark job as successful
+    public void markSucceeded(String workerId) {
+
+        verifyOwnership(workerId);
+
+        this.status = JobStatus.SUCCEEDED;
+        this.lockedAt = null;
+        this.lockedBy = null;
+        this.lastError = null;
+    }
+
+    // Mark job as failed
+    public void markFailed(String workerId, String error) {
+
+        verifyOwnership(workerId);
+
+        this.status = JobStatus.FAILED;
+        this.lastError = normalizeError(error);
+        this.lockedAt = null;
+        this.lockedBy = null;
+    }
+
+    // Ensure only the current worker can modify the claimed job
+    private void verifyOwnership(String workerId) {
+
+        if (status != JobStatus.PROCESSING ||
+                !Objects.equals(this.lockedBy, workerId)) {
+
+            throw new IllegalStateException(
+                    "Worker does not own this processing job"
+            );
+        }
+    }
+
+    private String normalizeError(String error) {
+
+        if (error == null || error.isBlank()) {
+            return "Unknown processing error";
+        }
+
+        return error.length() > 4000
+                ? error.substring(0, 4000)
+                : error;
+    }
+
+    public void scheduleRetry(
+            String workerId,
+            String error,
+            Instant nextAttemptAt
+    ) {
+        verifyOwnership(workerId);
+
+        if (attemptCount >= maxAttempts) {
+            throw new IllegalStateException(
+                    "Maximum attempts reached. Job cannot be retried."
+            );
+        }
+
+        status = JobStatus.RETRY_WAIT;
+        availableAt = Objects.requireNonNull(nextAttemptAt);
+
+        lastError = normalizeError(error);
+
+        lockedAt = null;
+        lockedBy = null;
+    }
+
+    public void moveToDlq(String workerId, String error) {
+        verifyOwnership(workerId);
+
+        status = JobStatus.DLQ;
+        lastError = normalizeError(error);
+
+        lockedAt = null;
+        lockedBy = null;
+    }
 }

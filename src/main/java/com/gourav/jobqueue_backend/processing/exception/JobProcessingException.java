@@ -6,9 +6,10 @@ public abstract class JobProcessingException extends RuntimeException {
 
     protected JobProcessingException(
             String message,
-            boolean retryable
+            boolean retryable,
+            Throwable cause
     ) {
-        super(message);
+        super(message, cause);
         this.retryable = retryable;
     }
 

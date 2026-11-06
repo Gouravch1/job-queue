@@ -57,10 +57,7 @@ public class EmailJobProcessor implements JobProcessor {
                 job.getId(),
                 payload.subject().length()
         );
-
-        /*
-         * Actual email provider integration will be added later.
-         * For now, this processor validates and simulates execution.
-         */
     }
+
+
 }
